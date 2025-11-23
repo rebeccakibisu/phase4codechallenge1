@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import validates
+from sqlalchemy import event
 
 db = SQLAlchemy()
 
@@ -22,8 +23,10 @@ class Camper(db.Model):
     def validate_name(self, key, value):
         """
         Name is required.
-        For the model tests, we allow assignment but return None for invalid,
-        so the NOT NULL constraint will fail on commit (not on construction).
+
+        For the tests, we allow the object to be constructed but return None
+        for invalid values so that the NOT NULL constraint fails on commit,
+        not at assignment time.
         """
         if value is None or not str(value).strip():
             return None
@@ -33,7 +36,8 @@ class Camper(db.Model):
     def validate_age(self, key, value):
         """
         Age must be an integer between 8 and 18 (inclusive).
-        For invalid values we return None so the NOT NULL constraint
+
+        For invalid values, we return None so that the NOT NULL constraint
         fails on commit, which is what the tests expect.
         """
         try:
@@ -88,10 +92,18 @@ class Signup(db.Model):
     __tablename__ = "signups"
 
     id = db.Column(db.Integer, primary_key=True)
-    time = db.Column(db.Integer, nullable=False)  # 0–23
+    time = db.Column(db.Integer, nullable=False)  # 0–23 inclusive
 
-    camper_id = db.Column(db.Integer, db.ForeignKey("campers.id"), nullable=False)
-    activity_id = db.Column(db.Integer, db.ForeignKey("activities.id"), nullable=False)
+    camper_id = db.Column(
+        db.Integer,
+        db.ForeignKey("campers.id"),
+        nullable=False,
+    )
+    activity_id = db.Column(
+        db.Integer,
+        db.ForeignKey("activities.id"),
+        nullable=False,
+    )
 
     camper = db.relationship("Camper", back_populates="signups")
     activity = db.relationship("Activity", back_populates="signups")
@@ -100,7 +112,9 @@ class Signup(db.Model):
     def validate_time(self, key, value):
         """
         time must be an integer between 0 and 23.
-        For invalid values, return None so NOT NULL constraint fails on commit.
+
+        For invalid values, we return None so that the NOT NULL constraint
+        fails on commit (tests expect the error to surface at commit time).
         """
         try:
             value = int(value)
@@ -144,3 +158,16 @@ class Signup(db.Model):
             "activity": self.activity.to_dict() if self.activity else None,
             "camper": self.camper.to_dict_basic() if self.camper else None,
         }
+
+
+# -------------------------------------------------------------------
+# Ensure cascade delete of Signups when an Activity is deleted
+# -------------------------------------------------------------------
+@event.listens_for(Activity, "before_delete")
+def delete_signups_for_activity(mapper, connection, target):
+    """
+    When an Activity is deleted, delete its related Signups via the ORM
+    so that the session state is updated and Signup.query.count() reflects
+    the deletion immediately (as required by the tests).
+    """
+    db.session.query(Signup).filter_by(activity_id=target.id).delete()
