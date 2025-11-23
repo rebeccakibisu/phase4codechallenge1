@@ -1,24 +1,29 @@
-from app import app
-from models import db, Camper, Activity, Signup
+# server/seed.py
+from .app import app, db
+from .models import Camper, Activity, Signup
 
-with app.app_context():
-    db.drop_all()
-    db.create_all()
 
-    # Create Campers
-    alice = Camper(name="Alice", age=10)
-    bob = Camper(name="Bob", age=12)
+def run_seed():
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
 
-    # Create Activities
-    hiking = Activity(name="Hiking", difficulty=2)
-    archery = Activity(name="Archery", difficulty=3)
+        c1 = Camper(name="Caitlin", age=8)
+        c2 = Camper(name="Lizzie", age=9)
 
-    db.session.add_all([alice, bob, hiking, archery])
-    db.session.commit()
+        a1 = Activity(name="Archery", difficulty=2)
+        a2 = Activity(name="Swimming", difficulty=3)
 
-    # Create Signups
-    s1 = Signup(time=10, camper=alice, activity=hiking)
-    s2 = Signup(time=11, camper=bob, activity=archery)
+        db.session.add_all([c1, c2, a1, a2])
+        db.session.commit()
 
-    db.session.add_all([s1, s2])
-    db.session.commit()
+        s1 = Signup(camper_id=c1.id, activity_id=a1.id, time=9)
+        s2 = Signup(camper_id=c2.id, activity_id=a2.id, time=14)
+
+        db.session.add_all([s1, s2])
+        db.session.commit()
+        print("Seed complete ✅")
+
+
+if __name__ == "__main__":
+    run_seed()
